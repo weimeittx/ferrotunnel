@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - Unreleased
+
+### Fixed
+
+#### TLS
+- **CLI TLS panic on first connection** ([#98](https://github.com/ferro-labs/ferrotunnel/issues/98)): The `ferrotunnel` binary panicked with `Could not automatically determine the process-level CryptoProvider` when TLS was enabled. rustls 0.23 requires `rustls::crypto::ring::default_provider().install_default()` to be called before any `ClientConfig`/`ServerConfig` is built. Added this call at the very start of `main()` in `ferrotunnel-cli` and added `rustls` as a direct dependency.
+
+### Added
+
+#### gRPC Support
+- **gRPC tunnel support**: Transparent gRPC tunneling over HTTP/2 — no tonic or protobuf knowledge required at the tunnel layer. FerroTunnel acts as a pure HTTP/2 proxy, preserving gRPC trailers (`grpc-status`, `grpc-message`) end-to-end
+- **Automatic gRPC detection**: Server-side ingress detects `Content-Type: application/grpc*` and tags the stream as `Protocol::GRPC` (the enum variant was already reserved; this release adds the full implementation)
+- **HTTP/2 forwarding path in ingress**: When a gRPC stream is detected, the ingress uses `hyper::client::conn::http2::handshake` over the `VirtualStream` instead of the HTTP/1.1 path, ensuring HTTP/2 framing and trailer semantics are preserved through the tunnel
+- **`LocalProxyService` h2 mode**: Added `use_h2` field and `with_pool_h2()` constructor; the service now uses `ConnectionPool::acquire_h2()` for gRPC streams, routing requests over a shared HTTP/2 connection to the local gRPC server
+- **`HttpProxy::handle_grpc_stream()`**: New method on `HttpProxy<L>` that serves a `VirtualStream` as HTTP/2 using `hyper::server::conn::http2::Builder`, with a dedicated HTTP/2 connection pool (always acquiring via `acquire_h2()`) for local forwarding
+- **Automatic CLI dispatch**: The CLI client dispatches `Protocol::GRPC` streams to `handle_grpc_stream()` automatically — no new flags required
+- **gRPC example**: New `examples/basic/grpc_tunnel.rs` demonstrating how to tunnel any local gRPC server
+- **Integration tests**: `test_grpc_tunnel` (end-to-end raw HTTP/2+gRPC through the full tunnel stack) and `test_non_grpc_not_classified_as_grpc` (regression guard for the HTTP path)
 ## [1.0.4] - 2026-03-09
 
 ### Changed
@@ -192,6 +210,7 @@ FerroTunnel v1.0.0 is the first stable release.
 | `ferrotunnel-common` | Shared types and errors |
 
 [Unreleased]: https://github.com/ferro-labs/ferrotunnel/compare/v1.0.4...HEAD
+[1.0.6]: https://github.com/ferro-labs/ferrotunnel/compare/v1.0.4...v1.0.6
 [1.0.4]: https://github.com/ferro-labs/ferrotunnel/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/ferro-labs/ferrotunnel/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ferro-labs/ferrotunnel/releases/tag/v1.0.2

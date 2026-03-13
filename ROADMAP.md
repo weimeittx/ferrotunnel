@@ -46,19 +46,19 @@ Embeddable, extensible, and observable reverse tunnel for Rust developers.
 
 > **Strategy**: Prioritize features that maximize user adoption and "time to first success"
 
-- **v1.0.4** - gRPC Support
-  - Native gRPC tunneling
+- **v1.0.6** - gRPC Support (in development)
+  - Native gRPC tunneling over HTTP/2 with automatic detection and trailer preservation
   - **Target Audience**: Enterprise and microservices developers
 
-- **v1.0.5** - QUIC Transport (HTTP/3)
+- **v1.0.7** - QUIC Transport (HTTP/3)
   - QUIC protocol support for reduced latency
   - **Differentiator**: Next-gen transport for competitive advantage
 
-- **v1.0.6** - Multi-region Support
+- **v1.0.8** - Multi-region Support
   - Geographic load balancing
   - Regional failover capabilities
 
-- **v1.0.7** - Custom Domains
+- **v1.0.9** - Custom Domains
   - Custom domain mapping for white-label deployments
 
 - **v2.0.0** - Breaking Changes (if needed)
