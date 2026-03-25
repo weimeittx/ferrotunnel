@@ -34,12 +34,21 @@ impl Plugin for TokenAuthPlugin {
         req: &mut http::Request<()>,
         _ctx: &RequestContext,
     ) -> Result<PluginAction, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let token = req
+        let header_token = req
             .headers()
             .get(&self.header_name)
-            .and_then(|v| v.to_str().ok());
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
 
-        match token {
+        let token = header_token.or_else(|| {
+            req.uri().query().and_then(|q| {
+                form_urlencoded::parse(q.as_bytes())
+                    .find(|(k, _)| k == "_token")
+                    .map(|(_, v)| v.into_owned())
+            })
+        });
+
+        match token.as_deref() {
             Some(t) if self.valid_tokens.contains(t) => Ok(PluginAction::Continue),
             _ => Ok(PluginAction::Reject {
                 status: 401,
@@ -93,6 +102,70 @@ mod tests {
 
         let action = plugin.on_request(&mut req, &ctx).await.unwrap();
 
+        match action {
+            PluginAction::Reject { status, .. } => assert_eq!(status, 401),
+            _ => panic!("Expected Reject"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_token_from_query_param() {
+        let plugin = TokenAuthPlugin::new(vec!["secret123".to_string()]);
+
+        let mut req = http::Request::builder()
+            .uri("/path?_token=secret123&other=value")
+            .body(())
+            .unwrap();
+
+        let ctx = RequestContext {
+            tunnel_id: "test".into(),
+            session_id: "session".into(),
+            remote_addr: "127.0.0.1:1234".parse().unwrap(),
+            timestamp: std::time::SystemTime::now(),
+        };
+
+        let action = plugin.on_request(&mut req, &ctx).await.unwrap();
+        assert_eq!(action, PluginAction::Continue);
+    }
+
+    #[tokio::test]
+    async fn test_header_token_takes_precedence_over_query() {
+        let plugin = TokenAuthPlugin::new(vec!["header-tok".to_string()]);
+
+        let mut req = http::Request::builder()
+            .header("X-Tunnel-Token", "header-tok")
+            .uri("/path?_token=query-tok")
+            .body(())
+            .unwrap();
+
+        let ctx = RequestContext {
+            tunnel_id: "test".into(),
+            session_id: "session".into(),
+            remote_addr: "127.0.0.1:1234".parse().unwrap(),
+            timestamp: std::time::SystemTime::now(),
+        };
+
+        let action = plugin.on_request(&mut req, &ctx).await.unwrap();
+        assert_eq!(action, PluginAction::Continue);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_query_token_rejects() {
+        let plugin = TokenAuthPlugin::new(vec!["secret123".to_string()]);
+
+        let mut req = http::Request::builder()
+            .uri("/path?_token=wrong")
+            .body(())
+            .unwrap();
+
+        let ctx = RequestContext {
+            tunnel_id: "test".into(),
+            session_id: "session".into(),
+            remote_addr: "127.0.0.1:1234".parse().unwrap(),
+            timestamp: std::time::SystemTime::now(),
+        };
+
+        let action = plugin.on_request(&mut req, &ctx).await.unwrap();
         match action {
             PluginAction::Reject { status, .. } => assert_eq!(status, 401),
             _ => panic!("Expected Reject"),

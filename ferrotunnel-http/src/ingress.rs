@@ -136,12 +136,18 @@ async fn handle_request(
         return Ok(full_response(StatusCode::OK, "OK"));
     }
 
-    // 1. Parse and normalize Host header
+    // 1. Parse and normalize Host header, fall back to ?_tunnel_id= query param
     let tunnel_id = match parse_and_normalize_host(req.headers().get("host")) {
         Ok(host) => host,
-        Err(msg) => {
-            return Ok(full_response(StatusCode::BAD_REQUEST, msg));
-        }
+        Err(_) => match extract_query_param(req.uri(), "_tunnel_id") {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                return Ok(full_response(
+                    StatusCode::BAD_REQUEST,
+                    "Missing tunnel_id: provide Host header or ?_tunnel_id= query param",
+                ));
+            }
+        },
     };
 
     let ctx = RequestContext {
@@ -502,6 +508,16 @@ fn is_websocket_upgrade(headers: &hyper::HeaderMap) -> bool {
     upgrade && connection
 }
 
+/// Extract a query parameter value from a URI by key.
+/// Returns `None` if the key is absent or the URI has no query string.
+fn extract_query_param(uri: &hyper::Uri, key: &str) -> Option<String> {
+    uri.query().and_then(|q| {
+        form_urlencoded::parse(q.as_bytes())
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+    })
+}
+
 /// Parse and normalize the Host header for secure multi-tenant routing.
 /// Handles IPv6 addresses, port stripping, and case normalization.
 fn parse_and_normalize_host(
@@ -722,5 +738,44 @@ mod tests {
     fn test_not_websocket_regular_request() {
         let headers = hyper::HeaderMap::new();
         assert!(!is_websocket_upgrade(&headers));
+    }
+
+    #[test]
+    fn test_extract_query_param_present() {
+        let uri: hyper::Uri = "/path?_tunnel_id=my-tunnel&foo=bar".parse().unwrap();
+        assert_eq!(
+            extract_query_param(&uri, "_tunnel_id"),
+            Some("my-tunnel".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_query_param_missing() {
+        let uri: hyper::Uri = "/path?foo=bar".parse().unwrap();
+        assert_eq!(extract_query_param(&uri, "_tunnel_id"), None);
+    }
+
+    #[test]
+    fn test_extract_query_param_no_query() {
+        let uri: hyper::Uri = "/path".parse().unwrap();
+        assert_eq!(extract_query_param(&uri, "_tunnel_id"), None);
+    }
+
+    #[test]
+    fn test_extract_query_param_url_encoded() {
+        let uri: hyper::Uri = "/path?_tunnel_id=hello%20world".parse().unwrap();
+        assert_eq!(
+            extract_query_param(&uri, "_tunnel_id"),
+            Some("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_query_param_token() {
+        let uri: hyper::Uri = "/path?_token=abc123&_tunnel_id=t1".parse().unwrap();
+        assert_eq!(
+            extract_query_param(&uri, "_token"),
+            Some("abc123".to_string())
+        );
     }
 }

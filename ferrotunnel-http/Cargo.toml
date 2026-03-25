@@ -27,6 +27,7 @@ futures = "0.3"
 tower = { version = "0.5", features = ["full"] }
 tower-service = "0.3"
 thiserror = { workspace = true }
+form_urlencoded = "1"
 ferrotunnel-observability = { version = "1.0.6", path = "../ferrotunnel-observability", optional = true }
 
 [features]
