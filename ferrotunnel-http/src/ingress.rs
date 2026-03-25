@@ -136,12 +136,12 @@ async fn handle_request(
         return Ok(full_response(StatusCode::OK, "OK"));
     }
 
-    // 1. Parse and normalize Host header, fall back to ?_tunnel_id= query param
-    let tunnel_id = match parse_and_normalize_host(req.headers().get("host")) {
-        Ok(host) => host,
-        Err(_) => match extract_query_param(req.uri(), "_tunnel_id") {
-            Some(id) if !id.is_empty() => id,
-            _ => {
+    // 1. Resolve tunnel_id: query param ?_tunnel_id= takes precedence over Host header.
+    let tunnel_id = match extract_query_param(req.uri(), "_tunnel_id").filter(|s| !s.is_empty()) {
+        Some(id) => id,
+        None => match parse_and_normalize_host(req.headers().get("host")) {
+            Ok(host) => host,
+            Err(_) => {
                 return Ok(full_response(
                     StatusCode::BAD_REQUEST,
                     "Missing tunnel_id: provide Host header or ?_tunnel_id= query param",
@@ -740,7 +740,7 @@ mod tests {
         assert!(!is_websocket_upgrade(&headers));
     }
 
-    #[test]
+    #[test] 
     fn test_extract_query_param_present() {
         let uri: hyper::Uri = "/path?_tunnel_id=my-tunnel&foo=bar".parse().unwrap();
         assert_eq!(
