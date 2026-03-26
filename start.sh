@@ -1,0 +1,1 @@
+./target/release/ferrotunnel server --token fast --http-bind 0.0.0.0:8088
