@@ -1,1 +1,1 @@
-nohup ./target/release/ferrotunnel server --token fast --http-bind 0.0.0.0:8088 > ferrotunnel.log 2>&1 &
+nohup ./target/release/ferrotunnel server --token frp_88888 --http-bind 0.0.0.0:8088 > ferrotunnel.log 2>&1 &
